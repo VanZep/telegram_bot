@@ -1,15 +1,10 @@
 import os
-
-import requests
-
 import time
-
 import logging
 
+import requests
 from telegram import Bot
-
 from dotenv import load_dotenv
-
 
 load_dotenv()
 
