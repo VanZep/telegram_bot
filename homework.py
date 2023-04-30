@@ -102,8 +102,8 @@ def check_response(response):
 
 
 def parse_status(homework):
-    """Функция извлекает из информации о конкретной домашней работе
-    статус этой работы.
+    """Функция извлекает из информации о конкретной домашней
+    работе статус этой работы.
     """
     if 'homework_name' not in homework:
         message = 'The name of the homework is missing'
