@@ -38,14 +38,14 @@ logging.basicConfig(
 
 
 def check_tokens():
-    """Функция проверяет доступность переменных окружения."""
+    """Проверяет доступность переменных окружения."""
     if not bool(PRACTICUM_TOKEN and TELEGRAM_TOKEN and TELEGRAM_CHAT_ID):
         logging.critical('Required environment variables are missing')
         SystemExit()
 
 
 def send_message(bot, message):
-    """Функция отправляет сообщение в Telegram чат."""
+    """Отправляет сообщение в Telegram чат."""
     try:
         bot.send_message(
             chat_id=TELEGRAM_CHAT_ID,
@@ -57,7 +57,7 @@ def send_message(bot, message):
 
 
 def get_api_answer(timestamp):
-    """Функция делает запрос к единственному эндпоинту API-сервиса."""
+    """Делает запрос к единственному эндпоинту API-сервиса."""
     try:
         response = requests.get(
             ENDPOINT,
@@ -80,7 +80,7 @@ def get_api_answer(timestamp):
 
 
 def check_response(response):
-    """Функция проверяет ответ API на соответствие документации."""
+    """Проверяет ответ API на соответствие документации."""
     if not isinstance(response, dict):
         message = 'The data must be of the dict type'
         logging.error(message)
@@ -102,13 +102,12 @@ def check_response(response):
 
 
 def parse_status(homework):
-    """Функция извлекает из информации о конкретной домашней
-    работе статус этой работы.
-    """
+    """Извлекает статус из информации о конкретной домашней работы."""
+
     if 'homework_name' not in homework:
         message = 'The name of the homework is missing'
         logging.error(message)
-        raise ValueError(message)
+        raise KeyError(message)
     if homework.get('status') not in HOMEWORK_VERDICTS:
         message = 'Status unknown or missing'
         logging.error(message)
