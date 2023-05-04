@@ -4,6 +4,7 @@ import logging
 
 import requests
 from telegram import Bot
+from telegram.error import BadRequest
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,19 +23,11 @@ HOMEWORK_VERDICTS = {
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 
-logging.basicConfig(
-    filename='homework.log',
-    filemode='w',
-    level=logging.DEBUG,
-    format='%(asctime)s, %(levelname)s, %(funcName)s, %(message)s'
-)
-
 
 def check_tokens():
     """Проверяет доступность переменных окружения."""
-    if not bool(PRACTICUM_TOKEN and TELEGRAM_TOKEN and TELEGRAM_CHAT_ID):
-        logging.critical('Required environment variables are missing')
-        SystemExit()
+    env_vars = (PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
+    return all(env_vars)
 
 
 def send_message(bot, message):
@@ -45,7 +38,7 @@ def send_message(bot, message):
             text=message
         )
         logging.debug('Bot sent message to Telegram')
-    except Exception as error:
+    except BadRequest as error:
         logging.error(f'Error "{error}" when sending a message to Telegram')
 
 
@@ -59,15 +52,13 @@ def get_api_answer(timestamp):
         )
     except requests.RequestException as error:
         message = f'Error when requesting the API: {error}'
-        logging.error(message)
 
     if response.status_code != 200:
         message = (
             f'Endpoint {ENDPOINT} unavailable. '
             f'Status code: {response.status_code}'
         )
-        logging.error(message)
-        raise AssertionError(message)
+        raise ConnectionError(message)
 
     return response.json()
 
@@ -76,20 +67,22 @@ def check_response(response):
     """Проверяет ответ API на соответствие документации."""
     if not isinstance(response, dict):
         message = 'The data must be of the dict type'
-        logging.error(message)
         raise TypeError(message)
     if not isinstance(response.get('homeworks'), list):
         message = 'The data must be of the list type'
-        logging.error(message)
         raise TypeError(message)
-    if response.get('homeworks') is None:
+    if not response.get('homeworks'):
         message = 'The "homework" key not found'
-        logging.error(message)
+        raise KeyError(message)
+    if not response.get('current_date'):
+        message = 'The "current_date" key not found'
         raise KeyError(message)
     if response.get('current_date') is None:
-        message = 'The "current_date" key not found'
-        logging.error(message)
-        raise KeyError(message)
+        message = 'The "current_date" value not found'
+        raise ValueError(message)
+    if not isinstance(response.get('current_date'), int):
+        message = 'The data must be of the int type'
+        raise TypeError(message)
 
     return response.get('homeworks')
 
@@ -97,12 +90,13 @@ def check_response(response):
 def parse_status(homework):
     """Извлекает статус из информации о конкретной домашней работы."""
     if 'homework_name' not in homework:
-        message = 'The name of the homework is missing'
-        logging.error(message)
+        message = 'The "homework_name" is missing'
+        raise KeyError(message)
+    if 'status' not in homework:
+        message = 'The "status" is missing'
         raise KeyError(message)
     if homework.get('status') not in HOMEWORK_VERDICTS:
         message = 'Status unknown or missing'
-        logging.error(message)
         raise ValueError(message)
 
     homework_name = homework.get('homework_name')
@@ -116,24 +110,30 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы бота."""
-    check_tokens()
+    if not check_tokens():
+        logging.critical('Required environment variables are missing')
+        SystemExit()
+
     bot = Bot(token=TELEGRAM_TOKEN)
     timestamp = {'from_date': int(time.time())}
+    previous_message = ''
 
     while True:
         try:
             response = get_api_answer(timestamp)
-            homework = check_response(response)
-            if homework:
-                message = parse_status(homework[0])
-                send_message(bot, message)
+            homeworks = check_response(response)
+            if homeworks:
+                message = parse_status(homeworks[0])
+                if message is not previous_message:
+                    send_message(bot, message)
+                    timestamp = {'from_date': response.get('current_date')}
+                    previous_message = message
             else:
                 logging.debug('Status not updated')
 
-            timestamp = {'from_date': response.get('current_date')}
-
         except Exception as error:
             msg = f'Сбой в работе программы: {error}'
+            print(msg)
             logging.error(msg)
             send_message(bot, msg)
 
@@ -142,4 +142,12 @@ def main():
 
 
 if __name__ == '__main__':
+
+    logging.basicConfig(
+        filename='homework.log',
+        filemode='w',
+        level=logging.DEBUG,
+        format='%(asctime)s, %(levelname)s, %(funcName)s, %(message)s'
+    )
+
     main()
