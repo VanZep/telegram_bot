@@ -26,8 +26,7 @@ HOMEWORK_VERDICTS = {
 
 def check_tokens():
     """Проверяет доступность переменных окружения."""
-    env_vars = (PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
-    return all(env_vars)
+    return all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
 
 
 def send_message(bot, message):
@@ -38,8 +37,11 @@ def send_message(bot, message):
             text=message
         )
         logging.debug('Bot sent message to Telegram')
+
     except BadRequest as error:
         logging.error(f'Error "{error}" when sending a message to Telegram')
+
+    return True
 
 
 def get_api_answer(timestamp):
@@ -50,8 +52,13 @@ def get_api_answer(timestamp):
             headers=HEADERS,
             params=timestamp
         )
+
     except requests.RequestException as error:
-        message = f'Error when requesting the API: {error}'
+        message = (
+            f'Error {error} occurred when '
+            f'requesting the API endpoint: {ENDPOINT}'
+        )
+        raise ConnectionError(message)
 
     if response.status_code != 200:
         message = (
@@ -68,13 +75,13 @@ def check_response(response):
     if not isinstance(response, dict):
         message = 'The data must be of the dict type'
         raise TypeError(message)
+    if 'homeworks' not in response:
+        message = 'The "homework" key not found'
+        raise KeyError(message)
     if not isinstance(response.get('homeworks'), list):
         message = 'The data must be of the list type'
         raise TypeError(message)
-    if not response.get('homeworks'):
-        message = 'The "homework" key not found'
-        raise KeyError(message)
-    if not response.get('current_date'):
+    if 'current_date' not in response:
         message = 'The "current_date" key not found'
         raise KeyError(message)
     if response.get('current_date') is None:
@@ -117,6 +124,7 @@ def main():
     bot = Bot(token=TELEGRAM_TOKEN)
     timestamp = {'from_date': int(time.time())}
     previous_message = ''
+    prev_err_msg = ''
 
     while True:
         try:
@@ -125,17 +133,19 @@ def main():
             if homeworks:
                 message = parse_status(homeworks[0])
                 if message is not previous_message:
-                    send_message(bot, message)
-                    timestamp = {'from_date': response.get('current_date')}
                     previous_message = message
+                    success_send = send_message(bot, message)
+                    if success_send:
+                        timestamp = {'from_date': response.get('current_date')}
             else:
                 logging.debug('Status not updated')
 
         except Exception as error:
             msg = f'Сбой в работе программы: {error}'
-            print(msg)
             logging.error(msg)
-            send_message(bot, msg)
+            if msg is not prev_err_msg:
+                prev_err_msg = msg
+                send_message(bot, msg)
 
         finally:
             time.sleep(RETRY_PERIOD)
