@@ -124,7 +124,6 @@ def main():
     bot = Bot(token=TELEGRAM_TOKEN)
     timestamp = {'from_date': int(time.time())}
     previous_message = ''
-    prev_err_msg = ''
 
     while True:
         try:
@@ -133,19 +132,18 @@ def main():
             if homeworks:
                 message = parse_status(homeworks[0])
                 if message is not previous_message:
-                    previous_message = message
-                    success_send = send_message(bot, message)
-                    if success_send:
+                    if send_message(bot, message):
+                        previous_message = message
                         timestamp = {'from_date': response.get('current_date')}
             else:
                 logging.debug('Status not updated')
 
         except Exception as error:
-            msg = f'Сбой в работе программы: {error}'
-            logging.error(msg)
-            if msg is not prev_err_msg:
-                prev_err_msg = msg
-                send_message(bot, msg)
+            err_msg = f'Сбой в работе программы: {error}'
+            logging.error(err_msg)
+            if err_msg is not previous_message:
+                if send_message(bot, err_msg):
+                    previous_message = err_msg
 
         finally:
             time.sleep(RETRY_PERIOD)
